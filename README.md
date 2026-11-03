@@ -80,6 +80,9 @@ sdkconfig.defaults         BLE commissioning, Wi-Fi only, -Os, console
   SDK build. Wired in through `CONFIG_CHIP_PROJECT_CONFIG`.
 - With `CONFIG_NONE_DEVICE_INFO_PROVIDER` the names come from those macros. Moving to factory NVS data
   (`fctry`) overrides them.
+- Wi-Fi TX power is capped at runtime (`WIFI_MAX_TX_POWER_DBM` in `board.h`, 8 dBm, reads back as 7 dBm). The
+  Kconfig `ESP_PHY_MAX_WIFI_TX_POWER` floor is 10 dBm, so it's set via `esp_wifi_set_max_tx_power()`
+  after start and on every `WIFI_EVENT_STA_START`. Raise it if the device moves away from the AP.
 - When the last fabric is removed, the device reopens a 300 s DNS-SD commissioning window.
 - App image is ~1.47MB, ~22% headroom per OTA slot.
 - The build warns about `std::is_trivial` deprecation in SDK headers (GCC 15). It's upstream and harmless.

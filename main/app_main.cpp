@@ -1,5 +1,7 @@
 #include <esp_err.h>
+#include <esp_event.h>
 #include <esp_log.h>
+#include <esp_wifi.h>
 #include <nvs_flash.h>
 
 #include <esp_matter.h>
@@ -107,6 +109,24 @@ static void pir_changed(bool occupied)
     });
 }
 
+// The TX power cap is reset when Wi-Fi restarts, so reapply it on every STA start.
+static void apply_wifi_tx_power()
+{
+    esp_err_t err = esp_wifi_set_max_tx_power(WIFI_MAX_TX_POWER_DBM * 4);   // units of 0.25 dBm
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "Failed to set Wi-Fi TX power: %s", esp_err_to_name(err));
+        return;
+    }
+    int8_t power;
+    esp_wifi_get_max_tx_power(&power);
+    ESP_LOGI(TAG, "Wi-Fi max TX power %.2f dBm", power / 4.0);
+}
+
+static void wifi_sta_start_handler(void *arg, esp_event_base_t base, int32_t id, void *data)
+{
+    apply_wifi_tx_power();
+}
+
 extern "C" void app_main()
 {
     esp_err_t err = nvs_flash_init();
@@ -140,6 +160,10 @@ extern "C" void app_main()
 
     err = esp_matter::start(app_event_cb);
     ABORT_APP_ON_FAILURE(err == ESP_OK, ESP_LOGE(TAG, "Failed to start Matter, err:%d", err));
+
+    // Matter has started Wi-Fi by now; cover this start and any later restart.
+    ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, WIFI_EVENT_STA_START, wifi_sta_start_handler, nullptr));
+    apply_wifi_tx_power();
 
     ESP_ERROR_CHECK(pir_sensor_init(pir_changed));
 

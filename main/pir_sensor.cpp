@@ -18,9 +18,28 @@ static void IRAM_ATTR pir_isr(void *arg)
     portYIELD_FROM_ISR(woken);
 }
 
+// Sample until the level has held for stable_ms.
+static bool read_stable_level(uint32_t stable_ms)
+{
+    bool level = gpio_get_level(BOARD_PIR_GPIO);
+    uint32_t stable = 0;
+    while (stable < stable_ms) {
+        vTaskDelay(pdMS_TO_TICKS(10));
+        bool now = gpio_get_level(BOARD_PIR_GPIO);
+        if (now == level) {
+            stable += 10;
+        } else {
+            level = now;
+            stable = 0;
+        }
+    }
+    return level;
+}
+
 static void pir_task(void *arg)
 {
-    bool reported = gpio_get_level(BOARD_PIR_GPIO);
+    // The line can glitch for >100 ms at power-up; don't report until it settles.
+    bool reported = read_stable_level(PIR_STARTUP_STABLE_MS);
     ESP_LOGI(TAG, "Initial state: %s", reported ? "occupied" : "unoccupied");
     s_cb(reported);
 
